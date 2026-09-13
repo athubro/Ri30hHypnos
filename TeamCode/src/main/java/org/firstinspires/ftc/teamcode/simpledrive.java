@@ -75,9 +75,19 @@ public class simpledrive extends LinearOpMode {
                 }
             }
 
+            if (gamepad2.x) {
+                shooter.motor.setVelocity(200);
+                slide.moveIntoPos();
+
+            }
+
+            if (gamepad1.y) {
+                slide.droppy();
+            }
+
             lastA = gamepad1.a;
 
-            slide.changeTarget(gamepad2.dpadLeftWasPressed(), gamepad1.dpadRightWasPressed());
+            slide.changeTarget(gamepad2.dpadLeftWasPressed(), gamepad2.dpadRightWasPressed());
 
             if (gamepad2.b) {
                 slide.runPosition();
@@ -293,6 +303,12 @@ public class simpledrive extends LinearOpMode {
                     "%.0f ticks/s",
                     shooter.getTargetVelocity()
                             - shooter.getCurrentVelocity()
+            );
+
+            telemetry.addData(
+                    "slide power",
+                    "%.0f ",
+                    slide.Slide.getPower()
             );
 
             telemetry.update();

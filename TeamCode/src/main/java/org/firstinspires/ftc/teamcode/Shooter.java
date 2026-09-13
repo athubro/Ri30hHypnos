@@ -9,7 +9,7 @@ import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 public class Shooter {
 
-    private final DcMotorEx motor;
+    public DcMotorEx motor;
     private final Telemetry telemetry;
 
     // PIDF CONSTANTS
@@ -92,6 +92,10 @@ public class Shooter {
 
     public double getCurrentVelocity() {
         return motor.getVelocity();
+    }
+
+    public void slowSpeed(){
+        motor.setVelocity(200);
     }
 
 
