@@ -27,6 +27,8 @@ public final class Intake {
 
     public final Telemetry telemetry;
     public DcMotorEx intakeMotor;
+    public DcMotor transfer;
+
 
     public CRServo right, left;
 
@@ -38,6 +40,8 @@ public final class Intake {
         right = hardwareMap.get(CRServo.class, "Right intake");
         left = hardwareMap.get(CRServo.class, "Left intake");
         intakeMotor = hardwareMap.get(DcMotorEx.class, "intake");
+        transfer = hardwareMap.get(DcMotorEx.class, "transfer");
+
 
     }
 }

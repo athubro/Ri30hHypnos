@@ -25,11 +25,13 @@ public class Shooter {
     private boolean lastDpadUp = false;
     private boolean lastDpadDown = false;
 
+    public boolean upToSpeed;
+
     public Shooter(HardwareMap hardwareMap, Telemetry telemetry) {
 
         this.telemetry = telemetry;
 
-        motor = hardwareMap.get(DcMotorEx.class, "shooter");
+        motor = hardwareMap.get(DcMotorEx.class, "flywheel");
 
         motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
@@ -56,6 +58,10 @@ public class Shooter {
         // Don't allow negative velocity
         if (targetVelocity < 0) {
             targetVelocity = 0;
+        }
+
+        if (Math.abs(targetVelocity - motor.getVelocity()) < 0) {
+
         }
 
         // Save button states
@@ -87,6 +93,9 @@ public class Shooter {
     public double getCurrentVelocity() {
         return motor.getVelocity();
     }
+
+
+
 
     public void stop() {
         targetVelocity = 0;
