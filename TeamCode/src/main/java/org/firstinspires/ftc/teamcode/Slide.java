@@ -81,48 +81,54 @@ public class Slide {
     }
 
     public void moveIntoPos(){
+
+
         Slide.setPower(0.8);
+
 
         Slide.setTargetPosition(873);
 
         //Slide.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        while (Math.abs(Slide.getCurrentPosition() - 873) > 50) {
 
-        while (Slide.isBusy()){
-            telemetry.update();
-            busy = true;
         }
-
-        busy = true;
-
         wrist.setPosition(0.5);
 
+    }
+
+    public void backToTransfer() {
         claw.setPosition(0.4);
         // res
         Slide.setPower(0.8);
         // t pos of wrist in 0.9
+    }
+
+    public void slideDown(){
         Slide.setTargetPosition(0);
     }
 
-    public void droppy(){
+    public void dropMovement(){
         //slide at 5600
         //wrist position at 0.2
         //claw pos at 0.5 to open
 
         Slide.setPower(0.8);
-        Slide.setTargetPosition(5600);
+        Slide.setTargetPosition(2160);
 
-        while (Slide.isBusy()){
-            telemetry.update();
-            busy = true;
+        while (Math.abs(Slide.getCurrentPosition() - 2160) > 50) {
+
         }
 
-        busy = false;
+
 
         wrist.setPosition(0.2);
-        claw.setPosition((0.5));
 
         //intermediate slide pos is 873
 
+    }
+
+    public void openClaw(){
+        claw.setPosition((0.5));
     }
 
 

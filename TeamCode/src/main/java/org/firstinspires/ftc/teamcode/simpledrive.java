@@ -77,13 +77,23 @@ public class simpledrive extends LinearOpMode {
 
             if (gamepad2.x) {
                 shooter.motor.setVelocity(200);
+
                 slide.moveIntoPos();
+                sleep(1000);
+                slide.backToTransfer();
+                sleep(1000);
+                slide.slideDown();
 
             }
 
-            if (gamepad1.y) {
-                slide.droppy();
+            if (gamepad2.y) {
+                slide.dropMovement();
+                sleep(1000);
+                slide.openClaw();
+
             }
+
+
 
             lastA = gamepad1.a;
 
