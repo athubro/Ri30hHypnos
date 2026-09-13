@@ -28,6 +28,8 @@ public class Slide {
     double slideKP=10;
     public Slide(HardwareMap hardwareMap, Telemetry telemetry) {
         Slide = hardwareMap.get(DcMotorEx.class, "slide");
+        wrist = hardwareMap.get(Servo.class, "SlideWrist");
+        claw = hardwareMap.get(Servo.class, "Claw");
         Slide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         Slide.setDirection(DcMotorSimple.Direction.REVERSE);
         Slide.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
