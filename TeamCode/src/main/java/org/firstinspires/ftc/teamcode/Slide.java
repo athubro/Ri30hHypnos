@@ -131,6 +131,29 @@ public class Slide {
         claw.setPosition((0.5));
     }
 
+    public void closeClaw(){
+        claw.setPosition(0.2);
+    }
+
+    public void moveBackReset(){
+
+
+        Slide.setPower(0.8);
+
+
+        Slide.setTargetPosition(873);
+
+        //Slide.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        while (Math.abs(Slide.getCurrentPosition() - 873) > 50) {
+
+        }
+        wrist.setPosition(0.9);
+
+
+    }
+
+
+
 
 
 

@@ -83,6 +83,8 @@ public class simpledrive extends LinearOpMode {
                 slide.backToTransfer();
                 sleep(1000);
                 slide.slideDown();
+                sleep(1000);
+                slide.closeClaw();
 
             }
 
@@ -90,6 +92,16 @@ public class simpledrive extends LinearOpMode {
                 slide.dropMovement();
                 sleep(1000);
                 slide.openClaw();
+
+            }
+
+            if (gamepad2.b){
+
+                slide.closeClaw();
+                sleep(300);
+                slide.moveBackReset();
+                sleep(1000);
+                slide.slideDown();
 
             }
 
