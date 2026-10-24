@@ -1,10 +1,16 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.acmerobotics.roadrunner.PoseVelocity2d;
+import com.acmerobotics.roadrunner.Vector2d;
+
+import com.qualcomm.robotcore.hardware.HardwareMap;
+
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 
 import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraFactory;
 import org.openftc.easyopencv.OpenCvCameraRotation;
+import org.openftc.easyopencv.OpenCvWebcam;
 import org.openftc.easyopencv.OpenCvPipeline;
 
 import org.opencv.core.Core;
@@ -15,30 +21,24 @@ import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
-import com.qualcomm.robotcore.hardware.HardwareMap;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public class ColorVision {
 
-    private OpenCvCamera camera;
+    private OpenCvWebcam webcam;
+    private final YellowPipeline pipeline;
 
-    // Detection status
-    private boolean detected = false;
+    private boolean autoPickup = false;
 
-    // Detected ball position
-    private double centerX = 0;
-    private double centerY = 0;
-
-    // Detected ball size
-    private double width = 0;
-    private double height = 0;
+    private static final double TURN_MULTIPLIER = 0.025;
+    private static final double MAX_TURN_POWER = 0.5;
+    private static final double FORWARD_POWER = 0.5;
+    private static final double ALIGNMENT_THRESHOLD = 5.0;
 
     public ColorVision(HardwareMap hardwareMap) {
 
-        int cameraMonitorViewId = hardwareMap
-                .appContext
+        int cameraMonitorViewId = hardwareMap.appContext
                 .getResources()
                 .getIdentifier(
                         "cameraMonitorViewId",
@@ -46,27 +46,26 @@ public class ColorVision {
                         hardwareMap.appContext.getPackageName()
                 );
 
-        WebcamName webcamName = hardwareMap.get(
+        // Correct webcam initialization.
+        WebcamName cameraName = hardwareMap.get(
                 WebcamName.class,
                 "Webcam 1"
         );
 
-        camera = OpenCvCameraFactory
-                .getInstance()
-                .createWebcam(
-                        webcamName,
-                        cameraMonitorViewId
-                );
+        webcam = OpenCvCameraFactory.getInstance().createWebcam(
+                cameraName,
+                cameraMonitorViewId
+        );
 
-        camera.setPipeline(new ElementPipeline());
+        pipeline = new YellowPipeline();
+        webcam.setPipeline(pipeline);
 
-        camera.openCameraDeviceAsync(
+        webcam.openCameraDeviceAsync(
                 new OpenCvCamera.AsyncCameraOpenListener() {
 
                     @Override
                     public void onOpened() {
-
-                        camera.startStreaming(
+                        webcam.startStreaming(
                                 640,
                                 480,
                                 OpenCvCameraRotation.UPRIGHT
@@ -75,207 +74,309 @@ public class ColorVision {
 
                     @Override
                     public void onError(int errorCode) {
+                        // Camera failed to open.
                     }
                 }
         );
     }
 
-    // =========================
-    // GETTERS
-    // =========================
+    /**
+     * Handles automatic pickup.
+     *
+     * @param togglePressed True when the toggle button is pressed.
+     * @param drive The robot's drive subsystem.
+     * @param intake The robot's intake subsystem.
+     * @return True if automatic pickup is handling the robot.
+     */
+    public boolean updateAutoPickup(
+            boolean togglePressed,
+            TankDrive drive,
+            Intake intake
+    ) {
 
+        // Toggle automatic pickup.
+        if (togglePressed) {
+            autoPickup = !autoPickup;
+
+            // Stop the robot when automatic pickup is disabled.
+            if (!autoPickup) {
+                stopPickup(drive, intake);
+                return true;
+            }
+        }
+
+        // Automatic pickup is disabled.
+        if (!autoPickup) {
+            return false;
+        }
+
+        // Stop if the target disappears.
+        if (!isDetected()) {
+            autoPickup = false;
+            stopPickup(drive, intake);
+            return true;
+        }
+
+        // Calculate the target's horizontal angle.
+        double offsetAngle = getOffsetAngle();
+
+        // Convert the angle into turning power.
+        double turnPower = offsetAngle * TURN_MULTIPLIER;
+
+        // Limit the turning power.
+        turnPower = Math.max(
+                -MAX_TURN_POWER,
+                Math.min(MAX_TURN_POWER, turnPower)
+        );
+
+        // Turn toward the target until aligned.
+        if (Math.abs(offsetAngle) > ALIGNMENT_THRESHOLD) {
+
+            drive.setDrivePowers(
+                    new PoseVelocity2d(
+                            new Vector2d(0, 0),
+                            turnPower
+                    )
+            );
+
+        } else {
+
+            // Drive forward when aligned.
+            drive.setDrivePowers(
+                    new PoseVelocity2d(
+                            new Vector2d(FORWARD_POWER, 0),
+                            0
+                    )
+            );
+        }
+
+        // Run the intake while approaching the target.
+        intake.intakeMotor.setPower(1.0);
+        intake.left.setPower(-1.0);
+        intake.right.setPower(1.0);
+
+        return true;
+    }
+
+    /**
+     * Stops the drive and intake.
+     */
+    private void stopPickup(TankDrive drive, Intake intake) {
+
+        drive.setDrivePowers(
+                new PoseVelocity2d(
+                        new Vector2d(0, 0),
+                        0
+                )
+        );
+
+        intake.intakeMotor.setPower(0);
+        intake.left.setPower(0);
+        intake.right.setPower(0);
+        intake.transfer.setPower(0);
+    }
+
+    /**
+     * Returns whether automatic pickup is enabled.
+     */
+    public boolean isAutoPickupActive() {
+        return autoPickup;
+    }
+
+    /**
+     * Returns whether a yellow object is detected.
+     */
     public boolean isDetected() {
-        return detected;
+        return pipeline.isDetected();
     }
 
-    public double getCenterX() {
-        return centerX;
+    /**
+     * Returns the detected object's center X coordinate.
+     */
+    public int getCenterX() {
+        return pipeline.getCenterX();
     }
 
-    public double getCenterY() {
-        return centerY;
+    /**
+     * Returns the detected object's center Y coordinate.
+     */
+    public int getCenterY() {
+        return pipeline.getCenterY();
     }
 
-    public double getWidth() {
-        return width;
+    /**
+     * Returns the detected object's width.
+     */
+    public int getWidth() {
+        return pipeline.getWidth();
     }
 
-    public double getHeight() {
-        return height;
+    /**
+     * Returns the detected object's height.
+     */
+    public int getHeight() {
+        return pipeline.getHeight();
     }
 
-    // =========================
-    // OFFSET ANGLE
-    // =========================
-
+    /**
+     * Estimates the horizontal angle between the target
+     * and the center of the camera image.
+     *
+     * Assumes a 60-degree horizontal field of view.
+     */
     public double getOffsetAngle() {
 
-        // Center of the 640x480 image
-        double imageCenterX = 320.0;
+        if (!isDetected()) {
+            return 0;
+        }
 
-        // Approximate horizontal field of view
-        double horizontalFOV = 60.0;
-
-        // How many pixels the ball is from the center
-        double pixelOffset = centerX - imageCenterX;
-
-        // Convert pixel offset to angle
-        return (pixelOffset / 640.0) * horizontalFOV;
+        return (getCenterX() - 320) / 640.0 * 60.0;
     }
 
-    // =========================
-    // STOP CAMERA
-    // =========================
-
+    /**
+     * Stops the camera and disables automatic pickup.
+     */
     public void stop() {
 
-        if (camera != null) {
+        autoPickup = false;
 
-            camera.stopStreaming();
-            camera.closeCameraDevice();
+        if (webcam != null) {
+            webcam.stopStreaming();
+            webcam.closeCameraDevice();
         }
     }
 
-    // =========================
-    // PIPELINE
-    // =========================
+    /**
+     * OpenCV pipeline for detecting yellow objects.
+     */
+    private static class YellowPipeline extends OpenCvPipeline {
 
-    private class ElementPipeline extends OpenCvPipeline {
+        private final Mat hsv = new Mat();
+        private final Mat mask = new Mat();
+        private final Mat hierarchy = new Mat();
 
-        Mat hsv = new Mat();
-        Mat mask = new Mat();
+        private final List<MatOfPoint> contours = new ArrayList<>();
+
+        private volatile boolean detected = false;
+
+        private volatile int centerX = 0;
+        private volatile int centerY = 0;
+        private volatile int width = 0;
+        private volatile int height = 0;
 
         @Override
         public Mat processFrame(Mat input) {
 
-            // Convert camera image to HSV
+            // Convert the camera image to HSV.
             Imgproc.cvtColor(
                     input,
                     hsv,
                     Imgproc.COLOR_RGB2HSV
             );
 
-            // =========================
-            // YELLOW COLOR RANGE
-            // =========================
-
-            // Lower bounds to cut out dark shadows, grey mats, and white walls
-            Scalar lowerYellow = new Scalar(
-                    18,   // Hue: Cuts out orange / red field perimeter elements
-                    100,  // Saturation: STRICTLY cuts out white walls, white papers, and silver metal
-                    60    // Value: STRICTLY cuts out pitch-black shadows and the dark gray foam tiles
-            );
-
-            // Upper bounds to cut out bright arena lights and green elements
-            Scalar upperYellow = new Scalar(
-                    32,   // Hue: Strict limit to avoid picking up the green field tape or green elements
-                    255,  // Max Saturation
-                    255   // Max Value
-            );
-
-
-            // Create binary mask
+            // Threshold for yellow.
             Core.inRange(
                     hsv,
-                    lowerYellow,
-                    upperYellow,
+                    new Scalar(18, 100, 60),
+                    new Scalar(32, 255, 255),
                     mask
             );
 
-            // =========================
-            // FIND CONTOURS
-            // =========================
-
-            List<MatOfPoint> contours = new ArrayList<>();
+            // Find yellow contours.
+            contours.clear();
 
             Imgproc.findContours(
                     mask,
                     contours,
-                    new Mat(),
+                    hierarchy,
                     Imgproc.RETR_EXTERNAL,
                     Imgproc.CHAIN_APPROX_SIMPLE
             );
 
-            // Reset detection every frame
-            detected = false;
-
-            centerX = 0;
-            centerY = 0;
-            width = 0;
-            height = 0;
-
-            // =========================
-            // FIND LARGEST YELLOW OBJECT
-            // =========================
-
+            // Find the largest contour.
             double largestArea = 0;
-
-            Rect bestRect = null;
+            Rect largestRect = null;
 
             for (MatOfPoint contour : contours) {
 
                 double area = Imgproc.contourArea(contour);
 
                 if (area > largestArea) {
-
                     largestArea = area;
-
-                    bestRect = Imgproc.boundingRect(
-                            contour
-                    );
+                    largestRect = Imgproc.boundingRect(contour);
                 }
+
+                contour.release();
             }
 
-            // =========================
-            // VALID DETECTION
-            // =========================
-
-            if (bestRect != null && largestArea > 500) {
+            // Accept objects with an area greater than 500 pixels.
+            if (largestRect != null && largestArea > 500) {
 
                 detected = true;
 
-                centerX =
-                        bestRect.x +
-                                bestRect.width / 2.0;
+                centerX = largestRect.x + largestRect.width / 2;
+                centerY = largestRect.y + largestRect.height / 2;
 
-                centerY =
-                        bestRect.y +
-                                bestRect.height / 2.0;
+                width = largestRect.width;
+                height = largestRect.height;
 
-                width = bestRect.width;
-                height = bestRect.height;
-
-                // Draw bounding box
+                // Draw the bounding box.
                 Imgproc.rectangle(
                         input,
-                        bestRect,
+                        largestRect,
                         new Scalar(0, 255, 0),
-                        3
+                        2
                 );
 
-                // Draw center point
+                // Draw the center of the detected object.
                 Imgproc.circle(
                         input,
-                        new Point(
-                                centerX,
-                                centerY
-                        ),
+                        new Point(centerX, centerY),
                         5,
-                        new Scalar(0, 255, 0),
+                        new Scalar(255, 0, 0),
                         -1
                 );
 
-                // Draw image center line
-                Imgproc.line(
-                        input,
-                        new Point(320, 0),
-                        new Point(320, 480),
-                        new Scalar(255, 0, 0),
-                        2
-                );
+            } else {
+
+                detected = false;
+
+                centerX = 0;
+                centerY = 0;
+                width = 0;
+                height = 0;
             }
 
+            // Draw a vertical line through the center of the image.
+            Imgproc.line(
+                    input,
+                    new Point(320, 0),
+                    new Point(320, 480),
+                    new Scalar(255, 255, 255),
+                    1
+            );
+
             return input;
+        }
+
+        public boolean isDetected() {
+            return detected;
+        }
+
+        public int getCenterX() {
+            return centerX;
+        }
+
+        public int getCenterY() {
+            return centerY;
+        }
+
+        public int getWidth() {
+            return width;
+        }
+
+        public int getHeight() {
+            return height;
         }
     }
 }
